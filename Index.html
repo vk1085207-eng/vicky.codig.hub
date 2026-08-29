@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Mausam Live 🌦️</title>
+
+<style>
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+  font-family:Arial,sans-serif;
+}
+
+body{
+  min-height:100vh;
+  padding:18px;
+  color:white;
+  background:linear-gradient(135deg,#2196f3,#64d8f5);
+}
+
+.container{
+  max-width:700px;
+  margin:auto;
+}
+
+.logo{
+  text-align:center;
+  font-size:32px;
+  font-weight:bold;
+  margin:18px 0;
+}
+
+.search{
+  display:flex;
+  gap:8px;
+  margin-bottom:12px;
+}
+
+input{
+  flex:1;
+  padding:14px;
+  border:0;
+  border-radius:12px;
+  font-size:16px;
+  outline:none;
+}
+
+button{
+  border:0;
+  border-radius:12px;
+  padding:0 16px;
+  background:#111;
+  color:white;
+  font-size:16px;
+}
+
+.location{
+  width:100%;
+  padding:13px;
+  margin-bottom:18px;
+  cursor:pointer;
+}
+
+.card{
+  background:rgba(255,255,255,.18);
+  backdrop-filter:blur(10px);
+  border-radius:22px;
+  padding:24px;
+  text-align:center;
+  box-shadow:0 8px 25px rgba(0,0,0,.15);
+}
+
+.city{
+  font-size:28px;
+  font-weight:bold;
+}
+
+.icon{
+  font-size:70px;
+  margin:8px;
+}
+
+.temp{
+  font-size:55px;
+  font-weight:bold;
+}
+
+.condition{
+  font-size:20px;
+  margin-bottom:18px;
+}
+
+.details{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.box{
+  padding:15px;
+  border-radius:14px;
+  background:rgba(255,255,255,.15);
+}
+
+.forecast{
+  margin-top:24px;
+}
+
+.forecast h2{
+  margin-bottom:12px;
+}
+
+.days{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+}
+
+.day{
+  padding:12px 5px;
+  border-radius:14px;
+  background:rgba(255,255,255,.15);
+}
+
+.dayIcon{
+  font-size:32px;
+  margin:7px;
+}
+
+.loading{
+  text-align:center;
+  margin:15px 0;
+}
+
+.error{
+  text-align:center;
+  margin:15px 0;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="logo">🌦️ Mausam Live</div>
+
+  <div class="search">
+    <input
+      id="cityInput"
+      type="text"
+      placeholder="शहर का नाम लिखें..."
+    >
+    <button onclick="searchCity()">🔍</button>
+  </div>
+
+  <button class="location" onclick="useLocation()">
+    📍 मेरी Location का मौसम देखें
+  </button>
+
+  <div id="loading" class="loading">
+    मौसम लोड हो रहा है...
+  </div>
+
+  <div id="error" class="error"></div>
+
+  <div id="weather" class="card" style="display:none;">
+
+    <div id="city" class="city"></div>
+
+    <div id="icon" class="icon"></div>
+
+    <div id="temp" class="temp"></div>
+
+    <div id="condition" class="condition"></div>
+
+    <div class="details">
+
+      <div class="box">
+        💧 नमी<br>
+        <b id="humidity"></b>
+      </div>
+
+      <div class="box">
+        💨 हवा<br>
+        <b id="wind"></b>
+      </div>
+
+    </div>
+
+    <div class="forecast">
+      <h2>📅 3 दिन का Forecast</h2>
+      <div id="days" class="days"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+
+const weatherCodes = {
+  0:["☀️","साफ आसमान"],
+  1:["🌤️","मुख्यतः साफ"],
+  2:["⛅","आंशिक बादल"],
+  3:["☁️","बादल"],
+  45:["🌫️","कोहरा"],
+  48:["🌫️","कोहरा"],
+  51:["🌦️","हल्की बूंदाबांदी"],
+  53:["🌦️","बूंदाबांदी"],
+  55:["🌧️","तेज बूंदाबांदी"],
+  61:["🌧️","हल्की बारिश"],
+  63:["🌧️","बारिश"],
+  65:["🌧️","तेज बारिश"],
+  71:["🌨️","हल्की बर्फबारी"],
+  73:["🌨️","बर्फबारी"],
+  75:["❄️","तेज बर्फबारी"],
+  80:["🌦️","बारिश"],
+  81:["🌧️","बारिश"],
+  82:["⛈️","तेज बारिश"],
+  95:["⛈️","गरज के साथ बारिश"],
+  96:["⛈️","ओलावृष्टि"],
+  99:["⛈️","तेज ओलावृष्टि"]
+};
+
+function weatherInfo(code){
+  return weatherCodes[code] || ["🌤️","मौसम"];
+}
+
+function showLoading(text="मौसम लोड हो रहा है..."){
+  document.getElementById("loading").textContent=text;
+  document.getElementById("loading").style.display="block";
+  document.getElementById("error").textContent="";
+}
+
+function showError(text){
+  document.getElementById("loading").style.display="none";
+  document.getElementById("error").textContent="❌ "+text;
+}
+
+async function getWeather(lat,lon,placeName){
+
+  showLoading();
+
+  try{
+
+    const url =
+      "https://api.open-meteo.com/v1/forecast"+
+      "?latitude="+lat+
+      "&longitude="+lon+
+      "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m"+
+      "&daily=weather_code,temperature_2m_max,temperature_2m_min"+
+      "&forecast_days=3"+
+      "&timezone=auto";
+
+    const response=await fetch(url);
+
+    if(!response.ok){
+      throw new Error("Weather data नहीं मिला");
+    }
+
+    const data=await response.json();
+
+    const current=data.current;
+    const info=weatherInfo(current.weather_code);
+
+    document.getElementById("city").textContent=
+      "📍 "+placeName;
+
+    document.getElementById("icon").textContent=
+      info[0];
+
+    document.getElementById("temp").textContent=
+      Math.round(current.temperature_2m)+"°C";
+
+    document.getElementById("condition").textContent=
+      info[1];
+
+    document.getElementById("humidity").textContent=
+      current.relative_humidity_2m+"%";
+
+    document.getElementById("wind").textContent=
+      current.wind_speed_10m+" km/h";
+
+    const days=document.getElementById("days");
+    days.innerHTML="";
+
+    for(let i=0;i<3;i++){
+
+      const dInfo=
+        weatherInfo(data.daily.weather_code[i]);
+
+      const date=
+        new Date(data.daily.time[i]+"T00:00:00");
+
+      const dayName=
+        date.toLocaleDateString("hi-IN",{
+          weekday:"short"
+        });
+
+      days.innerHTML+=`
+        <div class="day">
+          <b>${dayName}</b>
+          <div class="dayIcon">${dInfo[0]}</div>
+          <div>${dInfo[1]}</div>
+          <br>
+          <b>${Math.round(
+            data.daily.temperature_2m_max[i]
+          )}°C</b>
+          /
+          ${Math.round(
+            data.daily.temperature_2m_min[i]
+          )}°C
+        </div>
+      `;
+    }
+
+    document.getElementById("loading")
+      .style.display="none";
+
+    document.getElementById("error")
+      .textContent="";
+
+    document.getElementById("weather")
+      .style.display="block";
+
+  }catch(error){
+
+    showError(
+      "मौसम लोड नहीं हो पाया। इंटरनेट चेक करें।"
+    );
+
+    console.log(error);
+  }
+}
+
+async function searchCity(){
+
+  const city=
+    document.getElementById("cityInput")
+    .value.trim();
+
+  if(!city){
+    alert("पहले शहर का नाम लिखें");
+    return;
+  }
+
+  showLoading("शहर खोजा जा रहा है...");
+
+  try{
+
+    const url=
+      "https://geocoding-api.open-meteo.com/v1/search"+
+      "?name="+encodeURIComponent(city)+
+      "&count=1&language=hi&format=json";
+
+    const response=await fetch(url);
+    const data=await response.json();
+
+    if(!data.results || data.results.length===0){
+      throw new Error("शहर नहीं मिला");
+    }
+
+    const place=data.results[0];
+
+    await getWeather(
+      place.latitude,
+      place.longitude,
+      place.name
+    );
+
+  }catch(error){
+
+    showError(
+      "शहर नहीं मिला। नाम सही लिखकर दोबारा कोशिश करें।"
+    );
+
+    console.log(error);
+  }
+}
+
+function useLocation(){
+
+  if(!navigator.geolocation){
+
+    showError(
+      "आपके browser में Location उपलब्ध नहीं है।"
+    );
+
+    return;
+  }
+
+  showLoading(
+    "📍 आपकी Location पता की जा रही है..."
+  );
+
+  navigator.geolocation.getCurrentPosition(
+
+    async function(position){
+
+      const lat=position.coords.latitude;
+      const lon=position.coords.longitude;
+
+      let placeName="आपकी वर्तमान Location";
+
+      try{
+
+        const geoURL=
+          "https://geocoding-api.open-meteo.com/v1/reverse"+
+          "?latitude="+lat+
+          "&longitude="+lon+
+          "&count=1&language=hi&format=json";
+
+        const response=await fetch(geoURL);
+        const data=await response.json();
+
+        if(data.results && data.results.length>0){
+          placeName=data.results[0].name;
+        }
+
+      }catch(e){
+        console.log(e);
+      }
+
+      getWeather(lat,lon,placeName);
+    },
+
+    function(){
+
+      showError(
+        "Location permission नहीं मिली। Browser में Location अनुमति दें।"
+      );
+    },
+
+    {
+      enableHighAccuracy:true,
+      timeout:10000,
+      maximumAge:300000
+    }
+  );
+}
+
+document
+.getElementById("cityInput")
+.addEventListener("keydown",function(e){
+
+  if(e.key==="Enter"){
+    searchCity();
+  }
+
+});
+
+/*
+  वेबसाइट खुलते ही Location माँगी जाएगी।
+  अनुमति मिलने पर मौसम अपने-आप दिखेगा।
+*/
+window.addEventListener("load",function(){
+
+  setTimeout(function(){
+    useLocation();
+  },500);
+
+});
+
+</script>
+
+</body>
+</html>
